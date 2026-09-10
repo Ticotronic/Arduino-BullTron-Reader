@@ -651,25 +651,24 @@ void screen_gesture_cb(lv_event_t* e) {
 static void chart_draw_event_cb(lv_event_t * e) {
     lv_obj_draw_part_dsc_t * dsc = lv_event_get_draw_part_dsc(e);
     
-    // Sicherheits-Check: Wenn dsc oder der Text-Puffer leer sind, abbrechen!
+    // Sicherheits-Check
     if (!dsc || !dsc->text || dsc->text_length == 0) return; 
 
     if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_PRIMARY_X) {
-        if (dsc->value % 30 == 0) {
-            int minutesAgo = (HISTORY_SIZE - 1 - dsc->value);
-            if (minutesAgo == 0) {
-                snprintf(dsc->text, dsc->text_length, "Jetzt");
-            } else {
-                int hours = minutesAgo / 60;
-                int mins = minutesAgo % 60;
-                if (hours > 0) {
-                    snprintf(dsc->text, dsc->text_length, "-%dh%02d", hours, mins);
-                } else {
-                    snprintf(dsc->text, dsc->text_length, "-%dm", mins);
-                }
-            }
+        // dsc->value geht von 0 (ganz links) bis 4 (ganz rechts, aktuell)
+        // Wir rechnen das in Minuten um: 4-0=4 * 30 = 120min. 4-4=0 * 30 = 0min.
+        int minutesAgo = (4 - dsc->value) * 30; 
+        
+        if (minutesAgo == 0) {
+            snprintf(dsc->text, dsc->text_length, "Jetzt");
         } else {
-            dsc->text[0] = '\0';
+            int hours = minutesAgo / 60;
+            int mins = minutesAgo % 60;
+            if (hours > 0) {
+                snprintf(dsc->text, dsc->text_length, "-%dh%02d", hours, mins);
+            } else {
+                snprintf(dsc->text, dsc->text_length, "-%dm", mins);
+            }
         }
     }
 }
