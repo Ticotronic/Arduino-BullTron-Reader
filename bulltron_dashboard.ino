@@ -627,11 +627,58 @@ void build_ui() {
 // Wisch-Geste: links = zum Verlauf, rechts = zurueck zum Hauptbildschirm
 // ------------------------------------------------------------------
 void screen_gesture_cb(lv_event_t* e) {
-    lv_dir_t dir = lv_indev_get_gesture_dir(lv_indev_get_act());
-    if (dir == LV_DIR_LEFT) {
-        lv_scr_load_anim(scr_history, LV_SCR_LOAD_ANIM_MOVE_LEFT, 200, 0, false);
-    } else if (dir == LV_DIR_RIGHT) {
-        lv_scr_load_anim(scr_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 200, 0, false);
+    lv_obj_t* current_screen = lv_scr_act();
+    lv_indev_t* indev = lv_event_get_indev(e); // SICHERER: Holt Input direkt aus dem Event
+    
+    // Sicherheits-Check gegen Null-Pointer
+    if (!indev) return; 
+
+    lv_dir_t dir = lv_indev_get_gesture_dir(indev);
+
+    if (dir == LV_DIR_LEFT && current_screen == scr_main) {
+        lv_scr_load_anim(scr_history, LV_SCR_LOAD_ANIM_MOVE_LEFT, 250, 0, false);
+        lv_indev_wait_release(indev); 
+    } 
+    else if (dir == LV_DIR_RIGHT && current_screen == scr_history) {
+        lv_scr_load_anim(scr_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 250, 0, false);
+        lv_indev_wait_release(indev); 
+    }
+}
+
+// ----------------------------------------
+// Labeling der x-Achse und y-achse für den zweiten Screen
+// -------------------------------------------
+static void chart_draw_event_cb(lv_event_t * e) {
+    lv_obj_draw_part_dsc_t * dsc = lv_event_get_draw_part_dsc(e);
+    
+    if (!dsc || !dsc->text || dsc->text_length == 0) return; 
+
+    // --- X-ACHSE (Zeit) ---
+    if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_PRIMARY_X) {
+        int minutesAgo = (4 - dsc->value) * 30; 
+        if (minutesAgo == 0) {
+            snprintf(dsc->text, dsc->text_length, "Jetzt");
+        } else {
+            int hours = minutesAgo / 60;
+            int mins = minutesAgo % 60;
+            if (hours > 0) {
+                snprintf(dsc->text, dsc->text_length, "-%dh%02d", hours, mins);
+            } else {
+                snprintf(dsc->text, dsc->text_length, "-%dm", mins);
+            }
+        }
+    }
+    
+    // --- PRIMÄRE Y-ACHSE (Links: SoC 0 bis 100 %) ---
+    else if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_PRIMARY_Y) {
+        // dsc->value gibt den genauen Achsenwert an (0 bis 100)
+        snprintf(dsc->text, dsc->text_length, "%d", (int)dsc->value);
+    }
+    
+    // --- SEKUNDÄRE Y-ACHSE (Rechts: Strom -30 bis +30 A) ---
+    else if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_SECONDARY_Y) {
+        // dsc->value gibt den Stromwert an (-30 bis +30)
+        snprintf(dsc->text, dsc->text_length, "%d", (int)dsc->value);
     }
 }
 
@@ -640,9 +687,10 @@ void screen_gesture_cb(lv_event_t* e) {
 // Sekundaerachse, da unterschiedlicher Wertebereich/Einheit)
 // ------------------------------------------------------------------
 void build_history_ui() {
-    lv_obj_set_style_bg_color(lv_scr_act(), COL_BG, 0);
+    // lv_scr_act() durch scr_history ersetzt!
+    lv_obj_set_style_bg_color(scr_history, COL_BG, 0);
 
-    lv_obj_t* header2 = lv_obj_create(lv_scr_act());
+    lv_obj_t* header2 = lv_obj_create(scr_history);
     lv_obj_set_size(header2, SCREEN_W, 28);
     lv_obj_align(header2, LV_ALIGN_TOP_MID, 0, 0);
     lv_obj_set_style_bg_color(header2, COL_BRAND, 0);
@@ -655,38 +703,49 @@ void build_history_ui() {
     lv_obj_set_style_text_color(title2, lv_color_hex(0x1A1A1A), 0);
     lv_obj_align(title2, LV_ALIGN_LEFT_MID, 10, 0);
 
-    lv_obj_t* leg_soc = lv_label_create(lv_scr_act());
+    lv_obj_t* leg_soc = lv_label_create(scr_history);
     lv_label_set_text(leg_soc, "SoC %");
     lv_obj_set_style_text_color(leg_soc, COL_GREEN, 0);
     lv_obj_align(leg_soc, LV_ALIGN_TOP_LEFT, 15, 36);
 
-    lv_obj_t* leg_cur = lv_label_create(lv_scr_act());
+    lv_obj_t* leg_cur = lv_label_create(scr_history);
     lv_label_set_text(leg_cur, "Strom A");
     lv_obj_set_style_text_color(leg_cur, COL_YELLOW, 0);
     lv_obj_align(leg_cur, LV_ALIGN_TOP_RIGHT, -15, 36);
 
-    chart_history = lv_chart_create(lv_scr_act());
-    lv_obj_set_size(chart_history, SCREEN_W - 20, 380);
+    chart_history = lv_chart_create(scr_history);
+    lv_obj_set_size(chart_history, SCREEN_W - 42, 370);
     lv_obj_align(chart_history, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_text_font(chart_history, &lv_font_montserrat_8, 0);
+    lv_obj_set_style_pad_left(chart_history, 5, 0);
+    lv_obj_set_style_pad_right(chart_history, 5, 0);
+    //lv_obj_set_style_pad_top(chart_history, 10, 0);
+    //lv_obj_set_style_pad_bottom(chart_history, 25, 0);
     lv_obj_set_style_bg_color(chart_history, COL_PANEL, 0);
     lv_obj_set_style_border_width(chart_history, 0, 0);
     lv_chart_set_type(chart_history, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_history, HISTORY_SIZE);
-    lv_chart_set_div_line_count(chart_history, 5, 4);
+    lv_chart_set_div_line_count(chart_history, 5, 5);
     lv_chart_set_update_mode(chart_history, LV_CHART_UPDATE_MODE_SHIFT);
 
-    lv_chart_set_range(chart_history, LV_CHART_AXIS_PRIMARY_Y, 0, 100);   // SoC in %
-    lv_chart_set_range(chart_history, LV_CHART_AXIS_SECONDARY_Y, -30, 30); // Strom in A
+    lv_chart_set_range(chart_history, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
+    lv_chart_set_range(chart_history, LV_CHART_AXIS_SECONDARY_Y, -30, 30);
+    lv_chart_set_axis_tick(chart_history, LV_CHART_AXIS_PRIMARY_X, 4, 2, 5, 2, true, 40);
+    lv_chart_set_axis_tick(chart_history, LV_CHART_AXIS_PRIMARY_Y, 4, 2, 5, 2, true, 35);
+    lv_chart_set_axis_tick(chart_history, LV_CHART_AXIS_SECONDARY_Y, 4, 2, 5, 2, true, 35);
+    lv_obj_add_event_cb(chart_history, chart_draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
 
     series_soc = lv_chart_add_series(chart_history, COL_GREEN, LV_CHART_AXIS_PRIMARY_Y);
     series_current = lv_chart_add_series(chart_history, COL_YELLOW, LV_CHART_AXIS_SECONDARY_Y);
+
+    lv_obj_set_style_size(chart_history, 4, LV_PART_ITEMS);
 
     for (int i = 0; i < HISTORY_SIZE; i++) {
         lv_chart_set_next_value(chart_history, series_soc, LV_CHART_POINT_NONE);
         lv_chart_set_next_value(chart_history, series_current, LV_CHART_POINT_NONE);
     }
 
-    lv_obj_t* hint = lv_label_create(lv_scr_act());
+    lv_obj_t* hint = lv_label_create(scr_history);
     lv_label_set_text(hint, "<- Nach rechts wischen fuer Zurueck");
     lv_obj_set_style_text_color(hint, COL_TEXT_DIM, 0);
     lv_obj_set_style_text_font(hint, &lv_font_montserrat_10, 0);
@@ -811,13 +870,13 @@ void setup() {
 
     scr_main = lv_scr_act();
     scr_history = lv_obj_create(NULL);
-    lv_scr_load(scr_history);
+    //lv_scr_load(scr_history);
     build_history_ui();
 
     lv_obj_add_event_cb(scr_main, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
     lv_obj_add_event_cb(scr_history, screen_gesture_cb, LV_EVENT_GESTURE, NULL);
 
-    lv_scr_load(scr_main); // mit dem Hauptbildschirm starten
+    //lv_scr_load(scr_main); // mit dem Hauptbildschirm starten
 
     xTaskCreatePinnedToCore(
         bleWorkerTask,
