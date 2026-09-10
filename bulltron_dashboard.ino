@@ -646,19 +646,16 @@ void screen_gesture_cb(lv_event_t* e) {
 }
 
 // ----------------------------------------
-// Labeling der x-Achse für den zweiten Screen
+// Labeling der x-Achse und y-achse für den zweiten Screen
 // -------------------------------------------
 static void chart_draw_event_cb(lv_event_t * e) {
     lv_obj_draw_part_dsc_t * dsc = lv_event_get_draw_part_dsc(e);
     
-    // Sicherheits-Check
     if (!dsc || !dsc->text || dsc->text_length == 0) return; 
 
+    // --- X-ACHSE (Zeit) ---
     if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_PRIMARY_X) {
-        // dsc->value geht von 0 (ganz links) bis 4 (ganz rechts, aktuell)
-        // Wir rechnen das in Minuten um: 4-0=4 * 30 = 120min. 4-4=0 * 30 = 0min.
         int minutesAgo = (4 - dsc->value) * 30; 
-        
         if (minutesAgo == 0) {
             snprintf(dsc->text, dsc->text_length, "Jetzt");
         } else {
@@ -670,6 +667,18 @@ static void chart_draw_event_cb(lv_event_t * e) {
                 snprintf(dsc->text, dsc->text_length, "-%dm", mins);
             }
         }
+    }
+    
+    // --- PRIMÄRE Y-ACHSE (Links: SoC 0 bis 100 %) ---
+    else if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_PRIMARY_Y) {
+        // dsc->value gibt den genauen Achsenwert an (0 bis 100)
+        snprintf(dsc->text, dsc->text_length, "%d", (int)dsc->value);
+    }
+    
+    // --- SEKUNDÄRE Y-ACHSE (Rechts: Strom -30 bis +30 A) ---
+    else if (dsc->part == LV_PART_TICKS && dsc->id == LV_CHART_AXIS_SECONDARY_Y) {
+        // dsc->value gibt den Stromwert an (-30 bis +30)
+        snprintf(dsc->text, dsc->text_length, "%d", (int)dsc->value);
     }
 }
 
@@ -705,8 +714,13 @@ void build_history_ui() {
     lv_obj_align(leg_cur, LV_ALIGN_TOP_RIGHT, -15, 36);
 
     chart_history = lv_chart_create(scr_history);
-    lv_obj_set_size(chart_history, SCREEN_W - 20, 360);
+    lv_obj_set_size(chart_history, SCREEN_W - 42, 370);
     lv_obj_align(chart_history, LV_ALIGN_TOP_MID, 0, 60);
+    lv_obj_set_style_text_font(chart_history, &lv_font_montserrat_8, 0);
+    lv_obj_set_style_pad_left(chart_history, 5, 0);
+    lv_obj_set_style_pad_right(chart_history, 5, 0);
+    //lv_obj_set_style_pad_top(chart_history, 10, 0);
+    //lv_obj_set_style_pad_bottom(chart_history, 25, 0);
     lv_obj_set_style_bg_color(chart_history, COL_PANEL, 0);
     lv_obj_set_style_border_width(chart_history, 0, 0);
     lv_chart_set_type(chart_history, LV_CHART_TYPE_LINE);
@@ -717,10 +731,14 @@ void build_history_ui() {
     lv_chart_set_range(chart_history, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
     lv_chart_set_range(chart_history, LV_CHART_AXIS_SECONDARY_Y, -30, 30);
     lv_chart_set_axis_tick(chart_history, LV_CHART_AXIS_PRIMARY_X, 4, 2, 5, 2, true, 40);
+    lv_chart_set_axis_tick(chart_history, LV_CHART_AXIS_PRIMARY_Y, 4, 2, 5, 2, true, 35);
+    lv_chart_set_axis_tick(chart_history, LV_CHART_AXIS_SECONDARY_Y, 4, 2, 5, 2, true, 35);
     lv_obj_add_event_cb(chart_history, chart_draw_event_cb, LV_EVENT_DRAW_PART_BEGIN, NULL);
 
     series_soc = lv_chart_add_series(chart_history, COL_GREEN, LV_CHART_AXIS_PRIMARY_Y);
     series_current = lv_chart_add_series(chart_history, COL_YELLOW, LV_CHART_AXIS_SECONDARY_Y);
+
+    lv_obj_set_style_size(chart_history, 4, LV_PART_ITEMS);
 
     for (int i = 0; i < HISTORY_SIZE; i++) {
         lv_chart_set_next_value(chart_history, series_soc, LV_CHART_POINT_NONE);
