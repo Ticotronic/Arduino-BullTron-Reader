@@ -711,7 +711,7 @@ void build_history_ui() {
     lv_obj_set_style_border_width(chart_history, 0, 0);
     lv_chart_set_type(chart_history, LV_CHART_TYPE_LINE);
     lv_chart_set_point_count(chart_history, HISTORY_SIZE);
-    lv_chart_set_div_line_count(chart_history, 5, 4);
+    lv_chart_set_div_line_count(chart_history, 5, 5);
     lv_chart_set_update_mode(chart_history, LV_CHART_UPDATE_MODE_SHIFT);
 
     lv_chart_set_range(chart_history, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
