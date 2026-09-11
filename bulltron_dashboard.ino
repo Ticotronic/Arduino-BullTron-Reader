@@ -5,6 +5,20 @@
 #include <NimBLEDevice.h>
 #include <map>
 #include <string.h>
+#include <LittleFS.h>
+#include "Audio.h"
+
+// ==================================================================
+// AUDIO: I2S-Pins des onboard Lautsprecher-JST-Anschlusses
+// (community-verifiziert: BCLK=36, LRC=35, DOUT=37, Quad-PSRAM-Variante,
+// kein Konflikt mit dem PSRAM)
+// ==================================================================
+#define I2S_BCLK 36
+#define I2S_LRC  35
+#define I2S_DOUT 37
+
+Audio audio;
+volatile bool triggerConnectSound = false; // wird von Core 0 (BLE) gesetzt, von Core 1 (loop) abgeholt
 
 
 // ==================================================================
@@ -335,6 +349,13 @@ void bleWorkerTask(void* parameter) {
             delay(3000);
             continue;
         }
+
+        // Verbindung erfolgreich aufgebaut - Sound-Trigger setzen. Wichtig:
+        // audio.* wird bewusst NICHT hier (Core 0) aufgerufen, sondern nur
+        // dieses Flag gesetzt - die eigentliche Wiedergabe passiert in loop()
+        // auf Core 1, damit alle Audio-Bibliotheksaufrufe auf demselben Kern
+        // bleiben (die Bibliothek ist nicht fuer Cross-Core-Zugriff ausgelegt).
+        triggerConnectSound = true;
 
         // --- Polling-Phase: alle 5s beide Kommandos senden (wie Original-App) ---
         while (client->isConnected()) {
@@ -756,13 +777,13 @@ void build_history_ui() {
 // Wird bei jeder BMS-Aktualisierung aufgerufen, nimmt aber nur alle
 // SAMPLE_INTERVAL_MS tatsaechlich einen neuen Punkt ins Diagramm auf.
 // ------------------------------------------------------------------
-void update_history_sample(const BmsData& d) {
+void update_history_sample(float currentA, float socPrecise) {
     uint32_t now = millis();
     if (now - lastSampleMs < SAMPLE_INTERVAL_MS) return;
     lastSampleMs = now;
 
-    lv_chart_set_next_value(chart_history, series_soc, (int16_t)(d.socPrecise + 0.5f));
-    lv_chart_set_next_value(chart_history, series_current, (int16_t)roundf(d.current));
+    lv_chart_set_next_value(chart_history, series_soc, (int16_t)(socPrecise + 0.5f));
+    lv_chart_set_next_value(chart_history, series_current, (int16_t)roundf(currentA));
 }
 
 void update_arc_mask(uint8_t soc) {
@@ -831,7 +852,7 @@ void update_ui_from_bms() {
         }
     }
 
-    update_history_sample(d);
+    update_history_sample(d.current, d.socPrecise);
 }
 
 // ==================================================================
@@ -848,6 +869,12 @@ void setup() {
     display.setRotation(0); // Hochkant, natives Panel-Format 320x480
     display.setBrightness(200);
     lastTouchMs = millis();
+
+    if (!LittleFS.begin(true)) {
+        Serial.println("LittleFS Mount fehlgeschlagen! Sounddatei nicht verfuegbar.");
+    }
+    audio.setPinout(I2S_BCLK, I2S_LRC, I2S_DOUT);
+    audio.setVolume(15); // 0...21
 
     lv_init();
     lv_disp_draw_buf_init(&draw_buf, buf1, NULL, SCREEN_W * 40);
@@ -891,6 +918,12 @@ void setup() {
 
 void loop() {
     lv_timer_handler();
+    audio.loop(); // muss regelmaessig aufgerufen werden, damit Wiedergabe laeuft
+
+    if (triggerConnectSound) {
+        triggerConnectSound = false;
+        audio.connecttoFS(LittleFS, "/chime.mp3");
+    }
 
     if (backlightOn && (millis() - lastTouchMs > SCREEN_TIMEOUT_MS)) {
         display.setBrightness(BRIGHTNESS_DIMMED);
