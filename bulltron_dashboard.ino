@@ -657,10 +657,12 @@ void screen_gesture_cb(lv_event_t* e) {
     lv_dir_t dir = lv_indev_get_gesture_dir(indev);
 
     if (dir == LV_DIR_LEFT && current_screen == scr_main) {
+        audio.connecttoFS(LittleFS, "/door_open.wav");
         lv_scr_load_anim(scr_history, LV_SCR_LOAD_ANIM_MOVE_LEFT, 250, 0, false);
         lv_indev_wait_release(indev); 
     } 
     else if (dir == LV_DIR_RIGHT && current_screen == scr_history) {
+        audio.connecttoFS(LittleFS, "/door_close.wav");
         lv_scr_load_anim(scr_main, LV_SCR_LOAD_ANIM_MOVE_RIGHT, 250, 0, false);
         lv_indev_wait_release(indev); 
     }
